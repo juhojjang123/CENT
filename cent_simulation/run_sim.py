@@ -280,7 +280,7 @@ def load_data_point(args, seqlen, FC_devices, channels_per_block, PCIe_lanes_per
         'Channels per block': channels_per_block,
         'Sequence length': seqlen,
         'PIM latency': pim_latency,
-        'CXL latency': p2p_cxl_latency,
+        'CXL latency': (block_cxl_latency if args.model_parallel else 0) + p2p_cxl_latency * p2p_hops / TransformerBlock_number[args.model],
         'Acc latency': acc_latency,
         'TransformerBlock latency': transformer_block_latency,
         'Embedding latency': embedding_latency_data,
@@ -433,9 +433,9 @@ def process_throughputs(args):
             df = df[((args.prefill + args.decoding) >= df['Sequence length'])]
             seqlen = args.prefill + args.decoding
 
-        average_throughput = df['Throughput (tokens/s)'].mean()
         average_energy = df['Token energy (mJ)'].mean()
         total_latency = df['Token latency (ms)'].mean() * seqlen / 1000 # [Song]: convert ms to s
+        average_throughput = (seqlen / total_latency) * TransformerBlock_number[args.model]
         total_power = df['Total power (W)'].mean()
 
         new_result = {
