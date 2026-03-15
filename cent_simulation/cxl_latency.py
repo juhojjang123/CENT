@@ -5,7 +5,7 @@ bandwidth_per_lane = 8
 cxl_port_latency = 25
 pcie_latency = 5+20+5
 cxl_switch_latency = 20
-one_hop_round_trip_latency = cxl_port_latency * 4 + pcie_latency * 2 + cxl_switch_latency
+one_hop_round_trip_latency = cxl_port_latency * 4 + pcie_latency * 2 + cxl_switch_latency # FIXME
 MULTICAST=True
 if MULTICAST:
     pcie_latency *= 2
@@ -33,9 +33,13 @@ def llama_latency(size, PCIe_lanes_per_device, devices, total_devices):
         embedding_gather_latency = (one_hop_round_trip_latency + embedding_gather_flits * 256 / bandwidth_per_device * 1000000000 / 1024 / 1024 / 1024) / 1000000
         ffn_gather_latency = (one_hop_round_trip_latency + ffn_gather_flits * 256 / bandwidth_per_device * 1000000000 / 1024 / 1024 / 1024) / 1000000
 
-        total_latency = embedding_broadcast_latency * 4 + embedding_gather_latency * 5 + embedding_broadcast_latency * 1 + ffn_gather_latency  + ffn_broadcast_latency
-        # print(total_latency)
-        return total_latency
+        # [Song]: fixed
+        transformer_block_latency = embedding_broadcast_latency * 3 + embedding_gather_latency * 5 + ffn_gather_latency * 2 + ffn_broadcast_latency
+        
+        # [Song]: fixed to return the separate p2p latency
+        p2p_flits = math.ceil(embedding_size * 2 / 64 / 3)
+        p2p_latency = (one_hop_round_trip_latency + p2p_flits * 256 / bandwidth_per_device * 1000000000 / 1024 / 1024 / 1024) / 1000000
+        return transformer_block_latency, p2p_latency
 
 def gpt_latency(size, PCIe_lanes_per_device, devices, total_devices):
     if devices <= total_devices:
@@ -66,6 +70,7 @@ def vector_latency(size, PCIe_lanes_per_device):
     latency = (one_hop_round_trip_latency + flits * 256 / bandwidth_per_device * 1000000000 / 1024 / 1024 / 1024) / 1000000
     return latency
 
+# [Song]: not used anywhere in this codebase
 def vector_gather_latency(size, PCIe_lanes_per_device, devices, total_devices):
     if devices <= total_devices:
         embedding_size = size[0]
@@ -117,7 +122,7 @@ if __name__ == "__main__":
         else:
             if "Llama" in args.model:
                 print("model_parallel", args.model, "{}_devices".format(args.num_devices), "{}_group_devices".format(args.group_devices), "{}_PCIe_lanes".format(args.PCIe_lanes), end=" ")
-                latency = llama_latency([embedding_size[args.model], ffn_size[args.model]], args.PCIe_lanes, args.group_devices, args.num_devices)
+                _, latency = llama_latency([embedding_size[args.model], ffn_size[args.model]], args.PCIe_lanes, args.group_devices, args.num_devices)
                 print(latency)
             else:
                 print("model_parallel", args.model, "{}_devices".format(args.num_devices), "{}_group_devices".format(args.group_devices), "{}_PCIe_lanes".format(args.PCIe_lanes), end=" ")

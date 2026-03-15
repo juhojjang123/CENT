@@ -141,12 +141,16 @@ def command_processor(stat_path):
     stat["active_cycles"] = 0.00
     stat["precharged_cycles"] = 0.00
     
+    # [Song]
+    # Same parsing logic as compile.py, but reads a single .log file directly (not result.txt).
+    # "Processing" check is a defense code against multi-file logs, but has a bug: stat.keys is a method,
+    # so len(stat.keys) is always > 0 — should be len(stat.keys()).
     for line in lines:
         words = line.split(' ')
         while len(words) > 0 and words[0] == "":
             words.pop(0)
         if words[0] == "Processing":
-            if len(stat.keys) > 0:
+            if len(stat.keys) > 0: # again, this is a bug.
                 print("Error: multiple files in the same log")
                 exit(1)
         if "memory_system_cycles" in words[0]:
@@ -171,6 +175,9 @@ def command_processor(stat_path):
     # ms (average of all channels)
     stat["latency"] = stat["cycles"] * KILO / FREQ
     # ms (average of all channels)
+    # [Song]
+    # Bug: active_cycles was already divided by CH_PER_DV on line 168 — dividing again here is wrong.
+    # Thankfully, active_latency and precharged_latency are never used anywhere.
     stat["active_latency"] = stat["active_cycles"] / CH_PER_DV * KILO / FREQ
     # ms (average of all channels)
     stat["precharged_latency"] = stat["precharged_cycles"] / CH_PER_DV * KILO / FREQ
